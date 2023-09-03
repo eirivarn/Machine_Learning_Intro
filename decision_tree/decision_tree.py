@@ -112,7 +112,7 @@ class DecisionTree:
         predictions = []
         for index, row in X.iterrows():
             predictions.append(self.predict_sample(row, self.root))
-        return pd.Series(predictions)
+        return pd.Series(predictions, index=X.index)
 
 
     def get_rules(self, node=None, path=[]):
