@@ -6,10 +6,10 @@ import pandas as pd
 
 class KMeans:
     
-    def __init__():
+    def __init__(self, k=3):
         # NOTE: Feel free add any hyperparameters 
         # (with defaults) as you see fit
-        pass
+        
         
     def fit(self, X):
         """
@@ -19,7 +19,8 @@ class KMeans:
             X (array<m,n>): a matrix of floats with
                 m rows (#samples) and n columns (#features)
         """
-        # TODO: Implement
+        self.centroids = 
+
         raise NotImplemented()
     
     def predict(self, X):
