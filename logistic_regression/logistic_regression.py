@@ -6,11 +6,12 @@ import pandas as pd
 
 class LogisticRegression:
     
-    def __init__():
-        # NOTE: Feel free add any hyperparameters 
-        # (with defaults) as you see fit
-        pass
-        
+    def __init__(self, learning_rate = 0.001, n_iterations):
+        self.learning_rate = learning_rate
+        self.n_iterations = n_iterations
+        self.weights = None
+        self.bias = None
+
     def fit(self, X, y):
         """
         Estimates parameters for the classifier
@@ -21,9 +22,13 @@ class LogisticRegression:
             y (array<m>): a vector of floats containing 
                 m binary 0.0/1.0 labels
         """
-        # TODO: Implement
-        raise NotImplemented()
-    
+        n_samples, n_features = X.shape
+        self.weights = np.zeros(n_features)
+        self.bias = 0
+        for _ in range(self.n_iterations):
+
+        
+        
     def predict(self, X):
         """
         Generates predictions

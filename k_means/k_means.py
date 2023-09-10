@@ -13,7 +13,6 @@ class KMeans:
         self.preprocess = preprocess
         self.centroids = None
         self.clusters = None
- 
 
     def fit(self, X):
         """
@@ -27,7 +26,8 @@ class KMeans:
             X = preprocess_data(X)
         
         self.m, self.n = X.shape
-        self.centroids = self.init_centroids(X)
+        self.X_values = X.values  # Keep a copy of the data values for referencing
+        self.centroids = self.init_centroids_kmeanspp(X)
         self.clusters = self.assign_points_to_clusters(X)
         
         prev_centroids = np.zeros_like(self.centroids)
@@ -39,8 +39,6 @@ class KMeans:
 
             if np.allclose(self.centroids, prev_centroids, atol=self.tol):
                 break
-
-
 
     def predict(self, X):
         """
@@ -60,11 +58,10 @@ class KMeans:
         """
         y_pred = np.zeros(self.m, dtype=int)
         clusters = self.assign_points_to_clusters(X)
-        for cluster_idx, cluster in enumerate(clusters):
+        for cluster_idx, cluster in enumerate(clusters.values()):
             for sample_idx in cluster:
                 y_pred[sample_idx] = cluster_idx
         return y_pred
-
     
     def get_centroids(self):
         """
@@ -83,18 +80,38 @@ class KMeans:
         """
         return self.centroids
     
-    def init_centroids(self, X):
+    def init_centroids_kmeanspp(self, X, k=None):
         """
-        Initialize random centroids.
+        Initialize centroids using KMeans++.
+        
+        Args:
+            X (DataFrame): Data.
+            k (int, optional): Number of clusters. Defaults to self.k.
+            
+        Returns:
+            numpy.array: Initialized centroids.
         """
-        return np.random.uniform(np.amin(X, axis=0), np.amax(X, axis=0), size=(self.k, X.shape[1]))
+        if k is None:
+            k = self.k
+        
+        # Step 1: Choose one center uniformly at random from the data points
+        centroids = [X.iloc[np.random.choice(range(X.shape[0]))].values]
+        
+        # Steps 2-4: Choose the rest of the centroids
+        for _ in range(1, k):
+            distances = np.array([np.min([euclidean_distance(p, centroid) for centroid in centroids]) for p in X.values])
+            probs = distances / distances.sum()
+            next_centroid = X.iloc[np.random.choice(range(X.shape[0]), p=probs)].values
+            centroids.append(next_centroid)
+            
+        return np.array(centroids)
     
     def assign_points_to_clusters(self, X):
         """
         Assign each datapoint to a cluster
         """
-        clusters = [[] for _ in range(self.k)]
-        for idx, data_point in enumerate(X.values): 
+        clusters = {i: [] for i in range(self.k)}
+        for idx, data_point in enumerate(self.X_values): 
             distances = euclidean_distance(data_point, self.centroids)
             cluster_num = np.argmin(distances)
             clusters[cluster_num].append(idx)
@@ -103,11 +120,12 @@ class KMeans:
     def update_centroid_value(self, X):
         new_centroids = []
 
-        for cluster in self.clusters:
-            if len(cluster) == 0:
+        for cluster_indices in self.clusters.values():
+            if len(cluster_indices) == 0:
                 new_centroids.append(np.zeros(X.shape[1]))
-            else: 
-                new_centroids.append(np.mean(X.iloc[cluster], axis=0).values)
+            else:
+                cluster_data_points = self.X_values[cluster_indices]
+                new_centroids.append(np.mean(cluster_data_points, axis=0))
                 
         return np.array(new_centroids)
 
@@ -116,7 +134,7 @@ class KMeans:
 # --- Some utility functions 
 
 def preprocess_data(X):
-        X['x1'] = X['x1'] * 10
+        X['x1'] = X['x1'] * 9
         return X
 
 def euclidean_distance(x, y):
@@ -213,7 +231,7 @@ def euclidean_silhouette(X, z):
     return np.mean((b - a) / np.maximum(a, b))
 
 
-def determine_optimal_k_differential_elbow(X, k_range=(2, 15)):
+def determine_optimal_k_differential_elbow(X, k_range=(2, 11)):
     """
     Determine the optimal k value using the Differential Elbow Method.
     
@@ -253,7 +271,7 @@ def smooth_curve(points, factor=0.6):
             smoothed_points.append(point)
     return smoothed_points
 
-def determine_optimal_k_elbow_smoothed(X, k_range=(2, 15)):
+def determine_optimal_k_elbow_smoothed(X, k_range=(2, 11)):
     """
     Determine the optimal k value using the Elbow Method with a smoothed distortion curve.
     
@@ -282,7 +300,7 @@ def determine_optimal_k_elbow_smoothed(X, k_range=(2, 15)):
 
     return elbow_point
 
-def determine_optimal_k_combo(X, k_range=(2, 15)):
+def determine_optimal_k_combo(X, k_range=(2, 11)):
     """
     Determine the optimal k value using the original KMeans initialization and 
     a combination of Elbow Method and Silhouette Score.
