@@ -6,7 +6,7 @@ import pandas as pd
 
 class KMeans:
     
-    def __init__(self, k=2, preprocess=False, max_iterations=100, tol=0.00001):
+    def __init__(self, k=2, preprocess=False, max_iterations=1000, tol=0):
         self.k = k
         self.max_iterations = max_iterations
         self.tol = tol
@@ -212,3 +212,104 @@ def euclidean_silhouette(X, z):
     
     return np.mean((b - a) / np.maximum(a, b))
 
+
+def determine_optimal_k_differential_elbow(X, k_range=(2, 15)):
+    """
+    Determine the optimal k value using the Differential Elbow Method.
+    
+    Args:
+        X (DataFrame): The data to cluster.
+        k_range (tuple, optional): A tuple indicating the range of k values to check.
+                                   Defaults to (2, 15).
+
+    Returns:
+        int: Optimal value of k based on the Differential Elbow Method.
+    """
+    distortions = []
+
+    for k in range(k_range[0], k_range[1] + 1):
+        model = KMeans(k=k)
+        model.fit(X)
+        z = model.predict(X)
+        
+        distortions.append(euclidean_distortion(X, z))
+    
+    # Compute the second order difference of the distortions (differential elbow)
+    second_order_diff = np.diff(distortions, n=2)
+    
+    # The optimal k is where the second order difference is minimized
+    elbow_point = np.argmin(second_order_diff) + 2
+
+    return elbow_point
+
+def smooth_curve(points, factor=0.6):
+    """Smooths a curve using exponential moving average."""
+    smoothed_points = []
+    for point in points:
+        if smoothed_points:
+            previous = smoothed_points[-1]
+            smoothed_points.append(previous * factor + point * (1 - factor))
+        else:
+            smoothed_points.append(point)
+    return smoothed_points
+
+def determine_optimal_k_elbow_smoothed(X, k_range=(2, 15)):
+    """
+    Determine the optimal k value using the Elbow Method with a smoothed distortion curve.
+    
+    Args:
+        X (DataFrame): The data to cluster.
+        k_range (tuple, optional): A tuple indicating the range of k values to check.
+                                   Defaults to (2, 15).
+
+    Returns:
+        int: Optimal value of k based on the smoothed Elbow Method.
+    """
+    distortions = []
+
+    for k in range(k_range[0], k_range[1] + 1):
+        model = KMeans(k=k)
+        model.fit(X)
+        z = model.predict(X)
+        
+        distortions.append(euclidean_distortion(X, z))
+    
+    # Smooth the distortions curve
+    smoothed_distortions = smooth_curve(distortions)
+    
+    # Use Elbow Method on the smoothed curve
+    elbow_point = np.argmin(np.diff(np.diff(smoothed_distortions))) + 2
+
+    return elbow_point
+
+def determine_optimal_k_combo(X, k_range=(2, 15)):
+    """
+    Determine the optimal k value using the original KMeans initialization and 
+    a combination of Elbow Method and Silhouette Score.
+    
+    Args:
+        X (DataFrame): The data to cluster.
+        k_range (tuple, optional): A tuple indicating the range of k values to check.
+                                   Defaults to (2, 15).
+
+    Returns:
+        int: Optimal value of k based on combined metrics.
+    """
+    distortions = []
+    silhouette_scores = []
+    
+    for k in range(k_range[0], k_range[1] + 1):
+        model = KMeans(k=k)
+        model.fit(X)
+        z = model.predict(X)
+        
+        distortions.append(euclidean_distortion(X, z))
+        silhouette_scores.append(euclidean_silhouette(X, z))
+    
+    # Use Elbow Method
+    elbow_point = np.argmin(np.diff(np.diff(distortions))) + 2
+    
+    # Use Silhouette Score
+    max_silhouette_k = np.argmax(silhouette_scores) + 2
+    return elbow_point
+   
