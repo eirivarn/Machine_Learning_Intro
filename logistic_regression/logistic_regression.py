@@ -6,7 +6,7 @@ import pandas as pd
 
 class LogisticRegression:
     
-    def __init__(self, learning_rate = 0.001, n_iterations):
+    def __init__(self, learning_rate=10, n_iterations=1000):
         self.learning_rate = learning_rate
         self.n_iterations = n_iterations
         self.weights = None
@@ -25,10 +25,21 @@ class LogisticRegression:
         n_samples, n_features = X.shape
         self.weights = np.zeros(n_features)
         self.bias = 0
+        
+        # Gradient Descent with Learning Rate Decay
         for _ in range(self.n_iterations):
+            # Predict current outputs
+            model_output = sigmoid(np.dot(X, self.weights) + self.bias)
+            
+            # Compute gradients
+            dw = (1 / n_samples) * np.dot(X.T, (model_output - y))
+            db = (1 / n_samples) * np.sum(model_output - y)
+            
+            # Update weights and bias
+            self.weights -= self.learning_rate * dw
+            self.bias -= self.learning_rate * db
+            
 
-        
-        
     def predict(self, X):
         """
         Generates predictions
@@ -43,10 +54,24 @@ class LogisticRegression:
             A length m array of floats in the range [0, 1]
             with probability-like predictions
         """
-        # TODO: Implement
-        raise NotImplemented()
-        
+        linear_output = np.dot(X, self.weights) + self.bias
+        return sigmoid(linear_output)
 
+        
+class LogisticRegressionWithPolyFeatures(LogisticRegression):
+    def __init__(self, degree=2, **kwargs):
+        super().__init__(**kwargs)
+        self.degree = degree
+    
+    def fit(self, X, y):
+        # Generate polynomial features
+        X_poly = polynomial_features(X, self.degree)
+        super().fit(X_poly, y)
+    
+    def predict(self, X):
+        # Generate polynomial features
+        X_poly = polynomial_features(X, self.degree)
+        return super().predict(X_poly)
         
 # --- Some utility functions 
 
@@ -62,7 +87,7 @@ def binary_accuracy(y_true, y_pred, threshold=0.5):
         The average number of correct predictions
     """
     assert y_true.shape == y_pred.shape
-    y_pred_thresholded = (y_pred >= threshold).astype(float)
+    y_pred_thresholded = (y_pred >= threshold).astype(float) 
     correct_predictions = y_pred_thresholded == y_true 
     return correct_predictions.mean()
     
@@ -102,4 +127,41 @@ def sigmoid(x):
     """
     return 1. / (1. + np.exp(-x))
 
+
+def combinations_with_replacement(iterable, r):
+    """
+    Return r-length combinations of elements from the iterable allowing individual elements to be repeated more than once.
+    
+    Args:
+        iterable: Input iterable data.
+        r (int): Length of the combinations.
         
+    Returns:
+        Combinations with replacement.
+    """
+    pool = tuple(iterable)
+    n = len(pool)
+    if not n and r:
+        return
+    indices = [0] * r
+    yield tuple(pool[i] for i in indices)
+    while True:
+        for i in reversed(range(r)):
+            if indices[i] != n - 1:
+                break
+        else:
+            return
+        indices[i:] = [indices[i] + 1] * (r - i)
+        yield tuple(pool[i] for i in indices)
+
+
+def polynomial_features(X, degree=2):
+    n_samples, n_features = X.shape
+    new_features = [X]
+    
+    for d in range(2, degree + 1):
+        for feature_indices in combinations_with_replacement(range(n_features), d):
+            new_feature = np.prod(X[:, feature_indices], axis=1)
+            new_features.append(new_feature.reshape(n_samples, 1))
+    
+    return np.hstack(new_features)
