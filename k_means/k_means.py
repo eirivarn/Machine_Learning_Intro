@@ -3,61 +3,73 @@ import pandas as pd
 # IMPORTANT: DO NOT USE ANY OTHER 3RD PARTY PACKAGES
 # (math, random, collections, functools, etc. are perfectly fine)
 
-
 class KMeans:
     
     def __init__(self, k=2, preprocess=False, max_iterations=1000, tol=0):
+        """
+        Initializes the KMeans classifier.
+        
+        Parameters:
+        - k (int): Number of clusters.
+        - preprocess (bool): Whether to preprocess the data (normalize).
+        - max_iterations (int): Maximum number of iterations for KMeans clustering.
+        - tol (float): Tolerance level for checking convergence.
+        """
         self.k = k
         self.max_iterations = max_iterations
         self.tol = tol
         self.preprocess = preprocess
-        self.centroids = None
+        self.centroids = None  # Centroids will be initialized later
         self.clusters = None
 
     def fit(self, X):
         """
-        Estimates parameters for the classifier
-        
+        Estimates parameters for the classifier using KMeans algorithm.
+
         Args:
-            X (array<m,n>): a matrix of floats with
-                m rows (#samples) and n columns (#features)
+        - X (DataFrame): Input data to cluster.
         """
+        # Preprocess data if specified
         if self.preprocess:
-            X = preprocess_data(X)
+            X = self._preprocess_data(X)
         
+        # Store dimensions of data
         self.m, self.n = X.shape
-        self.X_values = X.values  # Keep a copy of the data values for referencing
-        self.centroids = self.init_centroids_kmeanspp(X)
-        self.clusters = self.assign_points_to_clusters(X)
+        # Store data values for easier referencing
+        self.X_values = X.values
+        # Initialize centroids using the simple method
+        self.centroids = self._initialize_centroids_PP(X)
+        # Assign data points to the initialized clusters
+        self.clusters = self._assign_to_clusters()
         
+        # Store previous centroids to check convergence
         prev_centroids = np.zeros_like(self.centroids)
 
+        # Iterate and refine cluster assignments and centroids
         for _ in range(self.max_iterations):
             prev_centroids = np.copy(self.centroids)
-            self.centroids = self.update_centroid_value(X)
-            self.clusters = self.assign_points_to_clusters(X)
+            # Compute new centroids based on current cluster assignments
+            self.centroids = self._compute_centroids()
+            # Reassign data points to clusters based on new centroids
+            self.clusters = self._assign_to_clusters()
 
+            # Check for convergence using the tolerance level
             if np.allclose(self.centroids, prev_centroids, atol=self.tol):
                 break
 
     def predict(self, X):
         """
-        Generates predictions
-        
-        Note: should be called after .fit()
-        
+        Generates cluster predictions for each data point.
+
         Args:
-            X (array<m,n>): a matrix of floats with 
-                m rows (#samples) and n columns (#features)
-            
+        - X (DataFrame): Data for which to predict clusters.
+        
         Returns:
-            A length m integer array with cluster assignments
-            for each point. E.g., if X is a 10xn matrix and 
-            there are 3 clusters, then a possible assignment
-            could be: array([2, 0, 0, 1, 2, 1, 1, 0, 2, 2])
+        - array: Cluster assignments for each data point.
         """
         y_pred = np.zeros(self.m, dtype=int)
-        clusters = self.assign_points_to_clusters(X)
+        clusters = self._assign_to_clusters()
+        # Assign cluster labels to each data point
         for cluster_idx, cluster in enumerate(clusters.values()):
             for sample_idx in cluster:
                 y_pred[sample_idx] = cluster_idx
@@ -65,77 +77,104 @@ class KMeans:
     
     def get_centroids(self):
         """
-        Returns the centroids found by the K-mean algorithm
+        Returns the centroids found by the K-means algorithm.
         
-        Example with m centroids in an n-dimensional space:
-        >>> model.get_centroids()
-        numpy.array([
-            [x1_1, x1_2, ..., x1_n],
-            [x2_1, x2_2, ..., x2_n],
-                    .
-                    .
-                    .
-            [xm_1, xm_2, ..., xm_n]
-        ])
+        Returns:
+        - array: Centroid values.
         """
         return self.centroids
     
-    def init_centroids_kmeanspp(self, X, k=None):
+    def _preprocess_data(self, X):
+        """
+        Scales the 'x1' column of the DataFrame X by its standard deviation.
+        
+        Args:
+        - X (DataFrame): Input data.
+        
+        Returns:
+        - DataFrame: Data with the 'x1' column scaled.
+        """
+        scale_factor = X['x1'].std()
+        X['x1'] = X['x1'] * scale_factor
+        return X
+
+        
+    def _initialize_centroids_simple(self, X):
+        """
+        Simple method to initialize centroids by randomly selecting k data points.
+        
+        Args:
+        - X (DataFrame): Data from which to select initial centroids.
+        
+        Returns:
+        - array: Initial centroid values.
+        """
+        # Randomly select k data points as initial centroids
+        random_indices = np.random.choice(X.shape[0], self.k, replace=False)
+        centroids = X.iloc[random_indices].values
+        return centroids
+
+    def _initialize_centroids_PP(self, X):
         """
         Initialize centroids using KMeans++.
         
         Args:
-            X (DataFrame): Data.
-            k (int, optional): Number of clusters. Defaults to self.k.
-            
-        Returns:
-            numpy.array: Initialized centroids.
-        """
-        if k is None:
-            k = self.k
+        - X (DataFrame): Data from which to select initial centroids.
         
-        # Step 1: Choose one center uniformly at random from the data points
+        Returns:
+        - array: Initial centroid values using KMeans++ method.
+        """
+        # Start by randomly selecting the first centroid
         centroids = [X.iloc[np.random.choice(range(X.shape[0]))].values]
         
-        # Steps 2-4: Choose the rest of the centroids
-        for _ in range(1, k):
-            distances = np.array([np.min([euclidean_distance(p, centroid) for centroid in centroids]) for p in X.values])
+        # Select remaining centroids based on distance probabilities
+        for _ in range(1, self.k):
+            # Calculate the distance of each data point to the nearest centroid
+            distances = np.array([min(euclidean_distance(p, centroid) for centroid in centroids) for p in X.values])
+            # Convert distances to probabilities
             probs = distances / distances.sum()
+            # Select the next centroid based on computed probabilities
             next_centroid = X.iloc[np.random.choice(range(X.shape[0]), p=probs)].values
             centroids.append(next_centroid)
             
         return np.array(centroids)
     
-    def assign_points_to_clusters(self, X):
+    def _assign_to_clusters(self):
         """
-        Assign each datapoint to a cluster
+        Assign each datapoint to a cluster based on distance to centroids.
+        
+        Returns:
+        - dict: Dictionary with cluster assignments.
         """
         clusters = {i: [] for i in range(self.k)}
+        # Iterate over each data point and assign it to the closest centroid's cluster
         for idx, data_point in enumerate(self.X_values): 
             distances = euclidean_distance(data_point, self.centroids)
             cluster_num = np.argmin(distances)
             clusters[cluster_num].append(idx)
         return clusters
 
-    def update_centroid_value(self, X):
+    def _compute_centroids(self):
+        """
+        Compute new centroid values based on current cluster assignments.
+        
+        Returns:
+        - array: New centroid values.
+        """
         new_centroids = []
 
+        # For each cluster, compute its centroid as the mean of its data points
         for cluster_indices in self.clusters.values():
             if len(cluster_indices) == 0:
-                new_centroids.append(np.zeros(X.shape[1]))
+                new_centroids.append(np.zeros(self.n))
             else:
                 cluster_data_points = self.X_values[cluster_indices]
                 new_centroids.append(np.mean(cluster_data_points, axis=0))
                 
         return np.array(new_centroids)
 
-
     
 # --- Some utility functions 
-
-def preprocess_data(X):
-        X['x1'] = X['x1'] * 9
-        return X
 
 def euclidean_distance(x, y):
     """
@@ -229,105 +268,3 @@ def euclidean_silhouette(X, z):
     b = (D + inf_mask).min(axis=1)
     
     return np.mean((b - a) / np.maximum(a, b))
-
-
-def determine_optimal_k_differential_elbow(X, k_range=(2, 11)):
-    """
-    Determine the optimal k value using the Differential Elbow Method.
-    
-    Args:
-        X (DataFrame): The data to cluster.
-        k_range (tuple, optional): A tuple indicating the range of k values to check.
-                                   Defaults to (2, 15).
-
-    Returns:
-        int: Optimal value of k based on the Differential Elbow Method.
-    """
-    distortions = []
-
-    for k in range(k_range[0], k_range[1] + 1):
-        model = KMeans(k=k)
-        model.fit(X)
-        z = model.predict(X)
-        
-        distortions.append(euclidean_distortion(X, z))
-    
-    # Compute the second order difference of the distortions (differential elbow)
-    second_order_diff = np.diff(distortions, n=2)
-    
-    # The optimal k is where the second order difference is minimized
-    elbow_point = np.argmin(second_order_diff) + 2
-
-    return elbow_point
-
-def smooth_curve(points, factor=0.6):
-    """Smooths a curve using exponential moving average."""
-    smoothed_points = []
-    for point in points:
-        if smoothed_points:
-            previous = smoothed_points[-1]
-            smoothed_points.append(previous * factor + point * (1 - factor))
-        else:
-            smoothed_points.append(point)
-    return smoothed_points
-
-def determine_optimal_k_elbow_smoothed(X, k_range=(2, 11)):
-    """
-    Determine the optimal k value using the Elbow Method with a smoothed distortion curve.
-    
-    Args:
-        X (DataFrame): The data to cluster.
-        k_range (tuple, optional): A tuple indicating the range of k values to check.
-                                   Defaults to (2, 15).
-
-    Returns:
-        int: Optimal value of k based on the smoothed Elbow Method.
-    """
-    distortions = []
-
-    for k in range(k_range[0], k_range[1] + 1):
-        model = KMeans(k=k)
-        model.fit(X)
-        z = model.predict(X)
-        
-        distortions.append(euclidean_distortion(X, z))
-    
-    # Smooth the distortions curve
-    smoothed_distortions = smooth_curve(distortions)
-    
-    # Use Elbow Method on the smoothed curve
-    elbow_point = np.argmin(np.diff(np.diff(smoothed_distortions))) + 2
-
-    return elbow_point
-
-def determine_optimal_k_combo(X, k_range=(2, 11)):
-    """
-    Determine the optimal k value using the original KMeans initialization and 
-    a combination of Elbow Method and Silhouette Score.
-    
-    Args:
-        X (DataFrame): The data to cluster.
-        k_range (tuple, optional): A tuple indicating the range of k values to check.
-                                   Defaults to (2, 15).
-
-    Returns:
-        int: Optimal value of k based on combined metrics.
-    """
-    distortions = []
-    silhouette_scores = []
-    
-    for k in range(k_range[0], k_range[1] + 1):
-        model = KMeans(k=k)
-        model.fit(X)
-        z = model.predict(X)
-        
-        distortions.append(euclidean_distortion(X, z))
-        silhouette_scores.append(euclidean_silhouette(X, z))
-    
-    # Use Elbow Method
-    elbow_point = np.argmin(np.diff(np.diff(distortions))) + 2
-    
-    # Use Silhouette Score
-    max_silhouette_k = np.argmax(silhouette_scores) + 2
-    return elbow_point
-   
