@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd 
 # IMPORTANT: DO NOT USE ANY OTHER 3RD PARTY PACKAGES
 # (math, random, collections, functools, etc. are perfectly fine)
-from collections import Counter
+
 
 class Node:
     def __init__(self, feature=None, is_leaf=False, class_label=None):

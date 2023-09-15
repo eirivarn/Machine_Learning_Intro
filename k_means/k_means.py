@@ -5,7 +5,7 @@ import pandas as pd
 
 class KMeans:
     
-    def __init__(self, k=2, preprocess=False, max_iterations=1000, tol=0):
+    def __init__(self, k=2, max_iterations=100, tol=0.0001, restart_threshold=1, max_restarts=100):
         """
         Initializes the KMeans classifier.
         
@@ -18,9 +18,22 @@ class KMeans:
         self.k = k
         self.max_iterations = max_iterations
         self.tol = tol
-        self.preprocess = preprocess
-        self.centroids = None  # Centroids will be initialized later
+        self.centroids = None  
         self.clusters = None
+        self.restart_threshold = restart_threshold
+        self.max_restarts = max_restarts
+
+    def preprocess(self, X):
+        """
+        Standardizes a pandas DataFrame.
+        
+        Parameters:
+        - df: Input pandas DataFrame
+        
+        Returns:
+        - Standardized pandas DataFrame
+        """
+        return (X - X.mean()) / X.std()
 
     def fit(self, X):
         """
@@ -29,33 +42,50 @@ class KMeans:
         Args:
         - X (DataFrame): Input data to cluster.
         """
-        # Preprocess data if specified
-        if self.preprocess:
-            X = self._preprocess_data(X)
-        
+
         # Store dimensions of data
         self.m, self.n = X.shape
         # Store data values for easier referencing
         self.X_values = X.values
-        # Initialize centroids using the simple method
-        self.centroids = self._initialize_centroids_PP(X)
-        # Assign data points to the initialized clusters
-        self.clusters = self._assign_to_clusters()
-        
-        # Store previous centroids to check convergence
-        prev_centroids = np.zeros_like(self.centroids)
 
-        # Iterate and refine cluster assignments and centroids
-        for _ in range(self.max_iterations):
-            prev_centroids = np.copy(self.centroids)
-            # Compute new centroids based on current cluster assignments
-            self.centroids = self._compute_centroids()
-            # Reassign data points to clusters based on new centroids
+        best_silhouette = -np.inf  # Initialize with a very low value
+        restarts = 0
+
+        while restarts < self.max_restarts:
+            # Initialize centroids using the KMeans++ method
+            self.centroids = self._initialize_centroids_PP(X)
+            # Assign data points to the initialized clusters
             self.clusters = self._assign_to_clusters()
 
-            # Check for convergence using the tolerance level
-            if np.allclose(self.centroids, prev_centroids, atol=self.tol):
+            # Iterate and refine cluster assignments and centroids
+            for _ in range(self.max_iterations):
+                prev_centroids = np.copy(self.centroids)
+                # Compute new centroids based on current cluster assignments
+                self.centroids = self._compute_centroids()
+                # Reassign data points to clusters based on new centroids
+                self.clusters = self._assign_to_clusters()
+
+                # Calculate silhouette score after reassignment
+                current_silhouette = euclidean_silhouette(X, self.predict(X))
+
+                # If the silhouette score does not improve, break out of the inner loop
+                if current_silhouette <= best_silhouette:
+                    break
+
+                best_silhouette = current_silhouette
+
+                # Check for convergence using the tolerance level
+                if np.allclose(self.centroids, prev_centroids, atol=self.tol):
+                    break
+
+            # If the silhouette score is above the restart threshold, break out of the outer loop
+            if best_silhouette > self.restart_threshold:
                 break
+
+            restarts += 1
+
+        # Store the best silhouette score
+        self.best_silhouette = best_silhouette
 
     def predict(self, X):
         """
@@ -83,21 +113,6 @@ class KMeans:
         - array: Centroid values.
         """
         return self.centroids
-    
-    def _preprocess_data(self, X):
-        """
-        Scales the 'x1' column of the DataFrame X by its standard deviation.
-        
-        Args:
-        - X (DataFrame): Input data.
-        
-        Returns:
-        - DataFrame: Data with the 'x1' column scaled.
-        """
-        scale_factor = X['x1'].std()
-        X['x1'] = X['x1'] * scale_factor
-        return X
-
         
     def _initialize_centroids_simple(self, X):
         """
@@ -173,7 +188,6 @@ class KMeans:
                 
         return np.array(new_centroids)
 
-    
 # --- Some utility functions 
 
 def euclidean_distance(x, y):
