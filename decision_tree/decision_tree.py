@@ -2,29 +2,24 @@ import numpy as np
 import pandas as pd 
 # IMPORTANT: DO NOT USE ANY OTHER 3RD PARTY PACKAGES
 # (math, random, collections, functools, etc. are perfectly fine)
-
+from collections import Counter
 
 class Node:
     def __init__(self, feature=None, is_leaf=False, class_label=None):
         """
         Initialize a node for the decision tree.
-        
-        Args:
-        - feature (str): Name of the feature used for splitting.
-        - is_leaf (bool): Indicates if the node is a terminal node (leaf).
-        - class_label: The label assigned to a leaf node.
         """
-        self.feature = feature  # Feature used for splitting at this node
-        self.children = {}  # Dict: {feature_value: child_node}
-        self.is_leaf = is_leaf  # Flag to check if node is leaf
-        self.class_label = class_label  # Label assigned if the node is leaf
+        self.feature = feature  
+        self.children = {}  
+        self.is_leaf = is_leaf  
+        self.class_label = class_label  #
         
 
 class DecisionTree:
     
     def __init__(self):
         """Initialize the DecisionTree_Original instance."""
-        self.root = None  # Root node of the decision tree
+        self.root = None  
         self.feature_importances_ = dict()
 
     def build_tree(self, X, y, features):
@@ -43,8 +38,9 @@ class DecisionTree:
         best_gain = -1
         best_feature = None
 
-        # Base case: Return a leaf node if all labels are the same or no features left
-        if len(y.unique()) == 1 or not features:
+        # Base case: Return a leaf node if all labels are pure or no features left to split
+        unique_labels = y.unique()
+        if len(unique_labels) == 1 or not features:
             return Node(is_leaf=True, class_label=y.iloc[0])
         
         # Find the best feature based on entropy reduction
@@ -56,12 +52,12 @@ class DecisionTree:
 
         # If no gain, return a leaf node with the most common label
         if best_gain == 0:
-            return Node(is_leaf=True, class_label=y.mode()[0])
+            most_common_label = y.mode()[0]
+            return Node(is_leaf=True, class_label=most_common_label)
 
-        # If gain is present, split on best feature
+        # Else split on best feature
         node = Node(feature=best_feature)
 
-        # Increment the feature importance
         if best_feature in self.feature_importances_:
             self.feature_importances_[best_feature] += best_gain
         else:
@@ -71,7 +67,12 @@ class DecisionTree:
         for value in X[best_feature].unique():
             subset_data = X[X[best_feature] == value]
             subset_target = y[subset_data.index]
-            remaining_features = list(set(features) - {best_feature})
+            
+            remaining_features = []
+            for feature in features:
+                if feature != best_feature:
+                    remaining_features.append(feature)
+            
             child_node = self.build_tree(subset_data, subset_target, remaining_features)
             node.children[value] = child_node
 
@@ -107,11 +108,6 @@ class DecisionTree:
         # Recur down the tree if current feature value matches a child node
         if feature_value in node.children:
             return self.predict_sample(row, node.children[feature_value])
-        
-        # If branch for feature value doesn't exist, predict most common label among leaves
-        leaf_labels = [child.class_label for child in node.children.values() if child.is_leaf]
-        label_counts = Counter(leaf_labels)
-        return label_counts.most_common(1)[0][0]
 
     def predict(self, X):
         """
@@ -123,10 +119,14 @@ class DecisionTree:
         Returns:
         - pd.Series: Predicted labels.
         """
-        predictions = [self.predict_sample(row, self.root) for _, row in X.iterrows()]
+        predictions = []
+        for index, row in X.iterrows():
+            predicted_label = self.predict_sample(row, self.root)
+            predictions.append(predicted_label)
+            
         return pd.Series(predictions, index=X.index)
 
-    def get_rules(self, node=None, path=[]):
+    def get_rules(self, node=None, current_path=[]):
         """
         Extract rules from the decision tree.
         
@@ -139,13 +139,17 @@ class DecisionTree:
         """
         if node is None:
             node = self.root
+
         if node.is_leaf:
-            return [(path, node.class_label)]
+            return [(current_path, node.class_label)]
         
-        rules = []
+        # Initialize a list to store the rules
+        rules = [] # = decision rules
+
         for value, child_node in node.children.items():
-            extended_path = path + [(node.feature, value)]
-            rules.extend(self.get_rules(child_node, extended_path))
+            new_path = current_path + [(node.feature, value)]
+            rules.extend(self.get_rules(child_node, new_path))
+        
         return rules
 
     def get_feature_importance(self):

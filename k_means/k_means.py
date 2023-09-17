@@ -5,7 +5,7 @@ import pandas as pd
 
 class KMeans:
     
-    def __init__(self, k=2, max_iterations=100, tol=0.0001, restart_threshold=1, max_restarts=100):
+    def __init__(self, k=2, max_iterations=100, tol=0.0001, restart_threshold=0.592, max_restarts=100):
         """
         Initializes the KMeans classifier.
         
@@ -45,10 +45,11 @@ class KMeans:
 
         # Store dimensions of data
         self.m, self.n = X.shape
+        
         # Store data values for easier referencing
         self.X_values = X.values
 
-        best_silhouette = -np.inf  # Initialize with a very low value
+        best_silhouette = -np.inf 
         restarts = 0
 
         while restarts < self.max_restarts:
@@ -84,7 +85,6 @@ class KMeans:
 
             restarts += 1
 
-        # Store the best silhouette score
         self.best_silhouette = best_silhouette
 
     def predict(self, X):
@@ -187,6 +187,34 @@ class KMeans:
                 new_centroids.append(np.mean(cluster_data_points, axis=0))
                 
         return np.array(new_centroids)
+
+    def cluster_stats(self):
+        """
+        Computes the statistics for each cluster including the number of data points 
+        and the average distance from the centroid to all data points in the cluster.
+        
+        Returns:
+        - cluster_sizes (list): A list containing the number of data points in each cluster.
+        - avg_distances (list): A list containing the average distance from the centroid 
+                                to all data points in each cluster.
+        """
+        cluster_sizes = []
+        avg_distances = []
+        
+        for cluster_num, data_indices in self.clusters.items():
+            cluster_data = self.X_values[data_indices]
+            centroid = self.centroids[cluster_num]
+            
+            # Calculate the size of the cluster
+            cluster_size = len(data_indices)
+            cluster_sizes.append(cluster_size)
+            
+            # Calculate average distance from the centroid to the data points
+            distances = euclidean_distance(centroid, cluster_data)
+            avg_distance = np.mean(distances) if cluster_size > 0 else 0
+            avg_distances.append(avg_distance)
+            
+        return cluster_sizes, avg_distances
 
 # --- Some utility functions 
 
